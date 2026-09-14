@@ -31,7 +31,7 @@ namespace fc {
         boost::endian::little_uint64_buf_at hilo[2];
         hilo[0] = uint128_hi64( v );
         hilo[1] = uint128_lo64( v );
-        s.write( hilo[0].data(), sizeof(hilo) );
+        s.write( (const char*)hilo[0].data(), sizeof(hilo) );
     }
     template<typename Stream>
     inline void unpack( Stream& s, uint128_t& v, uint32_t _max_depth )
