@@ -554,7 +554,7 @@ namespace fc { namespace http {
                else
                   ctx->load_verify_file( ca_filename );
                ctx->set_verify_depth(10);
-               ctx->set_verify_callback( boost::asio::ssl::rfc2818_verification( get_host() ) );
+               ctx->set_verify_callback( boost::asio::ssl::host_name_verification( get_host() ) );
             }
 
       };

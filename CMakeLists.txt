@@ -1,7 +1,7 @@
 #
 # Defines fc library target.
 
-CMAKE_MINIMUM_REQUIRED( VERSION 3.2 FATAL_ERROR )
+CMAKE_MINIMUM_REQUIRED( VERSION 3.5 FATAL_ERROR )
 PROJECT( fc )
 
 set( CMAKE_CXX_STANDARD 14 )
@@ -43,7 +43,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 SET(BOOST_COMPONENTS)
-LIST(APPEND BOOST_COMPONENTS coroutine thread date_time filesystem system program_options chrono unit_test_framework context iostreams regex)
+LIST(APPEND BOOST_COMPONENTS coroutine thread date_time filesystem program_options chrono unit_test_framework context iostreams regex)
 # boost::endian is also required, but FindBoost can't handle header-only libs
 SET( Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF" )
 
@@ -99,7 +99,7 @@ if ( NOT WIN32 )
     ExternalProject_Add( project_editline
      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/editline
      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline
-     CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/editline
+     CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CFLAGS=-std=gnu17 -O2" ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/editline
      BUILD_COMMAND make
      INSTALL_COMMAND true
      BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/editline/src/project_editline-build/src/.libs/libeditline.a
