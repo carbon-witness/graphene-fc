@@ -348,6 +348,18 @@ target_link_libraries( fc PUBLIC ${LINK_USR_LOCAL_LIB}  ${OPENSSL_LIBRARIES} ${Z
                                  ${PLATFORM_SPECIFIC_LIBS} ${RPCRT4} ${CMAKE_DL_LIBS} ${rt_library}
                                  ${editline_libraries} secp256k1 ${CMAKE_REQUIRED_LIBRARIES} )
 
+# Symbolized stack traces: Boost.Stacktrace's default backend prints bare addresses.
+# Use GCC's libbacktrace (reads symbols and DWARF) when the compiler ships it.
+if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT APPLE AND NOT WIN32 )
+   execute_process( COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libbacktrace.a
+                    OUTPUT_VARIABLE FC_LIBBACKTRACE OUTPUT_STRIP_TRAILING_WHITESPACE )
+   if( IS_ABSOLUTE "${FC_LIBBACKTRACE}" AND EXISTS "${FC_LIBBACKTRACE}" )
+      message( STATUS "fc: using libbacktrace for stack traces: ${FC_LIBBACKTRACE}" )
+      set_source_files_properties( src/stacktrace.cpp PROPERTIES COMPILE_DEFINITIONS BOOST_STACKTRACE_USE_BACKTRACE )
+      target_link_libraries( fc PUBLIC ${FC_LIBBACKTRACE} )
+   endif()
+endif()
+
 if(WIN32 AND MSVC)
     set_source_files_properties( src/network/http/websocket.cpp PROPERTIES COMPILE_FLAGS "/bigobj" )
 elseif(WIN32 AND MINGW)
