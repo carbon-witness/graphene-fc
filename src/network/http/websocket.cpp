@@ -155,6 +155,82 @@ namespace fc { namespace http {
          transport_type;
       };
 
+      // Client endpoints need the client configs: websocketpp::config::core (behind asio and
+      // asio_tls) declares rng_type as random::none, which always returns zero. Servers never
+      // mask frames, but a client uses rng_type for the RFC 6455 masking key, so on a server
+      // config every frame it sent went out with the key 00 00 00 00. core_client uses
+      // random_device instead. Apart from rng_type the client configs match the server ones.
+      struct asio_client_with_stub_log : public websocketpp::config::asio_client {
+          typedef asio_client_with_stub_log type;
+          typedef asio_client base;
+
+          typedef base::concurrency_type concurrency_type;
+
+          typedef base::request_type request_type;
+          typedef base::response_type response_type;
+
+          typedef base::message_type message_type;
+          typedef base::con_msg_manager_type con_msg_manager_type;
+          typedef base::endpoint_msg_manager_type endpoint_msg_manager_type;
+
+          typedef websocketpp::log::stub elog_type;
+          typedef websocketpp::log::stub alog_type;
+
+          typedef base::rng_type rng_type;
+
+          struct transport_config : public base::transport_config {
+              typedef type::concurrency_type concurrency_type;
+              typedef type::alog_type alog_type;
+              typedef type::elog_type elog_type;
+              typedef type::request_type request_type;
+              typedef type::response_type response_type;
+              typedef websocketpp::transport::asio::basic_socket::endpoint
+                  socket_type;
+          };
+
+          typedef websocketpp::transport::asio::endpoint<transport_config>
+              transport_type;
+
+          static const long timeout_open_handshake = 0;
+
+          struct permessage_deflate_config {};
+#ifdef HAS_ZLIB
+          typedef websocketpp::extensions::permessage_deflate::enabled <permessage_deflate_config> permessage_deflate_type;
+#else
+          typedef websocketpp::extensions::permessage_deflate::disabled <permessage_deflate_config> permessage_deflate_type;
+#endif
+      };
+      struct asio_tls_client_stub_log : public websocketpp::config::asio_tls_client {
+         typedef asio_tls_client_stub_log type;
+         typedef asio_tls_client base;
+
+         typedef base::concurrency_type concurrency_type;
+
+         typedef base::request_type request_type;
+         typedef base::response_type response_type;
+
+         typedef base::message_type message_type;
+         typedef base::con_msg_manager_type con_msg_manager_type;
+         typedef base::endpoint_msg_manager_type endpoint_msg_manager_type;
+
+         typedef websocketpp::log::stub elog_type;
+         typedef websocketpp::log::stub alog_type;
+
+         typedef base::rng_type rng_type;
+
+         struct transport_config : public base::transport_config {
+         typedef type::concurrency_type concurrency_type;
+         typedef type::alog_type alog_type;
+         typedef type::elog_type elog_type;
+         typedef type::request_type request_type;
+         typedef type::response_type response_type;
+         typedef websocketpp::transport::asio::tls_socket::endpoint socket_type;
+         };
+
+         typedef websocketpp::transport::asio::endpoint<transport_config>
+         transport_type;
+      };
+
 
 
 
@@ -196,6 +272,17 @@ namespace fc { namespace http {
       };
 
       typedef websocketpp::lib::shared_ptr<boost::asio::ssl::context> context_ptr;
+
+      // The context used to be created with ssl::context::tlsv1, which pins both the minimum
+      // and the maximum protocol version to TLS 1.0. OpenSSL 3 refuses TLS 1.0 at its default
+      // security level, so neither the websocket client nor the TLS server could complete a
+      // handshake at all. Negotiate the highest version both sides support, TLS 1.2 or newer.
+      static context_ptr make_tls_context( boost::asio::ssl::context::method method )
+      {
+         context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>( method );
+         SSL_CTX_set_min_proto_version( ctx->native_handle(), TLS1_2_VERSION );
+         return ctx;
+      }
 
       /// Tracks handler work that was handed over to the server thread, so that a server
       /// can wait for all of it before it is destroyed.
@@ -382,7 +469,7 @@ namespace fc { namespace http {
                //if( server_pem.size() )
                {
                   _server.set_tls_init_handler( [=]( websocketpp::connection_hdl hdl ) -> context_ptr {
-                        context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv1);
+                        context_ptr ctx = make_tls_context( boost::asio::ssl::context::tls_server );
                         try {
                            ctx->set_options(boost::asio::ssl::context::default_workarounds |
                            boost::asio::ssl::context::no_sslv2 |
@@ -524,8 +611,8 @@ namespace fc { namespace http {
 
 
 
-      typedef websocketpp::client<asio_with_stub_log> websocket_client_type;
-      typedef websocketpp::client<asio_tls_stub_log> websocket_tls_client_type;
+      typedef websocketpp::client<asio_client_with_stub_log> websocket_client_type;
+      typedef websocketpp::client<asio_tls_client_stub_log> websocket_tls_client_type;
 
       typedef websocket_client_type::connection_ptr  websocket_client_connection_type;
       typedef websocket_tls_client_type::connection_ptr  websocket_tls_client_connection_type;
@@ -587,10 +674,10 @@ namespace fc { namespace http {
             fc::optional<connection_hdl>       _hdl;
       };
 
-      class websocket_client_impl : public generic_websocket_client_impl<asio_with_stub_log>
+      class websocket_client_impl : public generic_websocket_client_impl<asio_client_with_stub_log>
       {};
 
-      class websocket_tls_client_impl : public generic_websocket_client_impl<asio_tls_stub_log>
+      class websocket_tls_client_impl : public generic_websocket_client_impl<asio_tls_client_stub_log>
       {
          public:
             websocket_tls_client_impl( const std::string& ca_filename )
@@ -617,7 +704,7 @@ namespace fc { namespace http {
                 std::string ca_filename_copy = ca_filename;
 
                 _client.set_tls_init_handler( [=](websocketpp::connection_hdl) {
-                   context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv1);
+                   context_ptr ctx = make_tls_context( boost::asio::ssl::context::tls_client );
                    try {
                       ctx->set_options(boost::asio::ssl::context::default_workarounds |
                       boost::asio::ssl::context::no_sslv2 |
