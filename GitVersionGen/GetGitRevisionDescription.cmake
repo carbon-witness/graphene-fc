@@ -76,6 +76,22 @@ function(get_git_head_revision _refspecvar _hashvar)
 		@ONLY)
 	include("${GIT_DATA}/grabRef.cmake")
 
+	# grabRef.cmake reads the ref file directly and yields the ref name instead of the hash
+	# once git has packed that ref. It is still needed: the files it copies make CMake re-run
+	# when HEAD moves. The hash itself comes from git.
+	find_package(Git QUIET)
+	if(GIT_FOUND)
+		execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+			WORKING_DIRECTORY "${GIT_PARENT_DIR}"
+			RESULT_VARIABLE rev_parse_result
+			OUTPUT_VARIABLE rev_parse_hash
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+			ERROR_QUIET)
+		if(rev_parse_result EQUAL 0)
+			set(HEAD_HASH "${rev_parse_hash}")
+		endif()
+	endif()
+
 	set(${_refspecvar} "${HEAD_REF}" PARENT_SCOPE)
 	set(${_hashvar} "${HEAD_HASH}" PARENT_SCOPE)
 endfunction()
